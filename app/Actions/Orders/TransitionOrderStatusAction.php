@@ -5,6 +5,7 @@ namespace App\Actions\Orders;
 use App\Enums\OrderStatus;
 use App\Exceptions\InvalidOrderTransitionException;
 use App\Models\Order;
+use App\Models\User;
 use App\Services\Orders\OrderStatusMachine;
 use Illuminate\Support\Facades\DB;
 
@@ -14,7 +15,7 @@ class TransitionOrderStatusAction
         private readonly OrderStatusMachine $statusMachine
     ) {}    
 
-    public function execute(Order $order, OrderStatus $newStatus): Order
+    public function execute(Order $order, OrderStatus $newStatus, ?User $actor = null, ?string $reason = null): Order
     {
         $currentStatus = $order->status;
 
@@ -26,13 +27,22 @@ class TransitionOrderStatusAction
             );
         }    
 
-        return DB::transaction(function () use ($order, $newStatus) {
+        return DB::transaction(function () use ($order, $newStatus, $currentStatus,$actor, $reason) {
+            $timestampColumn = $this->timestampColumnFor($newStatus);
+
             $order->update([
                 'status' => $newStatus->value,
-                $this->timestampColumnFor($newStatus) => now(),
+                $timestampColumn => now(),
             ]);
 
-            return $order->fresh();
+            $order->auditLogs()->create([
+                'user_id' => $actor?->id,
+                'action' => 'order.status_changed',
+                'old_values' => ['status' => $currentStatus->value],
+                'new_values' => ['status' => $newStatus->value, $timestampColumn => $order->{$timestampColumn}?->toISOString(),],
+                'reason' => $reason,
+            ]);
+            return $order->fresh(['lineItems', 'auditLogs']);
         });
     }
 

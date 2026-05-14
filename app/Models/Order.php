@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\OrderStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Order extends Model
@@ -71,5 +72,10 @@ class Order extends Model
     private function formatMoney(int $amountInCents): string
     {
         return '$' . number_format($amountInCents / 100, 2);
+    }
+
+    public function auditLogs(): MorphMany
+    {
+        return $this->morphMany(AuditLog::class, 'auditable');
     }
 }
